@@ -1,0 +1,6 @@
+*__pycache__*
+*desktop.ini
+.ipynb_checkpoints
+
+#ignore pickled files
+*.pickle
