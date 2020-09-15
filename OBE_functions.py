@@ -9,6 +9,8 @@ sys.path.append('./molecular-state-classes-and-functions/')
 from classes import UncoupledBasisState, CoupledBasisState, State
 from matrix_element_functions import ED_ME_coupled
 from tqdm.notebook import tqdm
+from scipy import constants
+
 
 def generate_sharp_superoperator(M):
     """
@@ -241,6 +243,65 @@ def generate_density_matrix(QN, states_pop, pops):
         rho[i,i] = pop
 
     return rho
+
+def microwave_field(x, z0 = 0, fwhm = 0.0254, power = 1):
+    """
+    Function that calculates the electric field at position x due to a 
+    microwave horn with a Gaussian intensity profile defined by its width (fwhm) 
+    and total power.
+    
+    inputs:
+    x = position where electric field is to be evaluated (meters)
+    z0 = position of the center of the microwave beam
+    fwhm = full-width-half-maximum of the microwave intensity profile
+    power = output power of microwaves in watts
+    
+    returns:
+    E = magnitude of microwave electric field at x
+    """
+    
+    #Convert FWHM to standard deviation
+    sigma = fwhm/(2*np.sqrt(2*np.log(2)))
+    
+    #Convert power to amplitude of the Gaussian
+    I0 = power/(2*np.pi *sigma**2)
+    
+    #Get the value of z where the field needs to be evaluated
+    z = x[2]
+    
+    #Calculate intensity at (0,0,z)
+    I_z = I0 * np.exp(-1/2*((z-z0)/sigma)**2)
+    
+    #Calculate electric field from intensity (in V/m)
+    c = constants.c
+    epsilon_0 = constants.epsilon_0
+    E = np.sqrt(2*I_z/(c*epsilon_0))
+    
+    #Return electric field in V/cm
+    return E/100
+    
+def calculate_power_needed(Omega, ME, fwhm = 0.0254, D_TlF = 13373921.308037223):
+    """
+    Function to calculate the microwave power required to get peak Rabi rate Omega
+    for a transition with given matrix element when the microwaves have a
+    Gaussian spatial profile
+    """
+    
+    #Calculate the microwave electric field required (in V/m)
+    E =  Omega/(ME*D_TlF) * 100
+    
+    #Convert E to peak intensity
+    c = constants.c
+    epsilon_0 = constants.epsilon_0
+    I = 1/2 * c * epsilon_0 * E**2
+    
+    #Convert FWHM to standard deviation
+    sigma = fwhm/(2*np.sqrt(2*np.log(2)))
+    
+    #Convert power to amplitude of the Gaussian
+    P = I * (2*np.pi *sigma**2)
+    
+    return P
 
 
 
