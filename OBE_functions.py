@@ -46,7 +46,7 @@ def generate_flat_superoperator(M):
 
 def generate_commutator_superoperator(M):
     """
-    Function that generates the commutator superoperator in Liouville space
+    Function that generates the commutator [M,rho] superoperator in Liouville space
 
     inputs:
     M = matrix representation of operator in Hilbert space that whose commutator with density matrix is being generated
@@ -193,7 +193,7 @@ def calculate_BR(excited_state, ground_states):
 
     return BRs
 
-def collapse_matrix(QN, ground_states, excited_states):
+def collapse_matrices(QN, ground_states, excited_states, gamma = 1, tol = 1e-4):
     """
     Function that generates the collapse matrix for given ground and excited states
 
@@ -201,24 +201,37 @@ def collapse_matrix(QN, ground_states, excited_states):
     QN = list of states that defines the basis for the calculation
     ground_states = list of ground states that are coupled to the excited states
     excited_states = list of excited states that are coupled to the ground states
+    gamma = decay rate of excited states
+    tol = couplings smaller than tol/np.sqrt(gamma) are set to zero to speed up computation
 
     outputs:
-    H = collapse matrix
+    C_list = list of collapse matrices
     """
 
     #Initialize the coupling matrix
     H = np.zeros((len(QN),len(QN)), dtype = complex)
+    
+    #Initialize list of collapse matrices
+    C_list = []
 
     #Start looping over ground and excited states
     for excited_state in tqdm(excited_states):
         j = QN.index(excited_state)
         BRs = calculate_BR(excited_state, ground_states)
+        if np.sum(BRs) > 1:
+            print("Warning: Branching ratio sum > 1")
         for ground_state, BR in zip(ground_states, BRs):
             i = QN.index(ground_state)
 
-            H[i,j] = np.sqrt(BR)
+            if np.sqrt(BR) > tol:
+                #Initialize the coupling matrix
+                H = np.zeros((len(QN),len(QN)), dtype = complex)
 
-    return H
+                H[i,j] = np.sqrt(BR*gamma)
+
+                C_list.append(H)
+
+    return C_list
 
 def generate_density_matrix(QN, states_pop, pops):
     """
@@ -304,7 +317,19 @@ def calculate_power_needed(Omega, ME, fwhm = 0.0254, D_TlF = 13373921.308037223)
     return P
 
 
+def calculate_decay_rate(excited_state, ground_states):
+    """
+    Function to calculate decay rates so can check that all excited states have the same decay rates
+    """
 
+    #Initialize container fo matrix elements between excited state and ground states
+    MEs = np.zeros(len(ground_states), dtype = complex)
 
+    #loop over ground states
+    for i, ground_state in enumerate(ground_states):
+        MEs[i] = ED_ME_mixed_state(ground_state,excited_state)
+
+    rate = np.sum(np.abs(MEs)**2)
+    return rate
 
 
