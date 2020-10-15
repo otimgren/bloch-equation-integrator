@@ -354,8 +354,8 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
         print("Time to generate H_oc_tot_t: {:.3e} s".format(time))
         print("Diagonal of H_rot in rotating frame of laser:")
         print(np.diag(H_rot)/(2*np.pi))
-        # print("D_laser:")
-        # print(np.diag(D_laser))
+        print("D_laser:")
+        print(np.diag(D_laser))
         with open("H_oc_tot.pickle",'wb+') as f:
             pickle.dump(H_oc_tot_t(T/2.3156165),f)        
 
