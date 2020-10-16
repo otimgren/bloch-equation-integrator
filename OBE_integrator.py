@@ -4,9 +4,9 @@
 import sys
 import pickle
 import numpy as np
-# from numpy import triu, tril
+from numpy import triu, tril
 import scipy
-from scipy.sparse import csr_matrix, triu, tril
+from scipy.sparse import csr_matrix, coo_matrix#, triu, tril
 from scipy.sparse.linalg import onenormest
 import timeit
 import pickle
@@ -233,7 +233,7 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
         omegas = []
         for microwave_field in microwave_fields:
             #Find the exact ground and excited states for the field
-            microwave_field.find_closest_eigenstates(H_int, QN, V_ref_int)
+            microwave_field.find_closest_eigenstates(H_rot, QN, V_ref_int)
 
             #Find the coupling matrices due to the laser
             H_list = microwave_field.generate_couplings(QN)
@@ -243,10 +243,10 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
             Omega_t = microwave_field.find_Omega_t(r_t) #Time dependence of Rabi rate
             p_t = microwave_field.p_t #Time dependence of polarization of field
             ME_main = microwave_field.calculate_ME_main() #Angular part of ME for main transition
-            omegas.append(microwave_field.calculate_frequency(H_int, QN)) #Calculate frequency of transition
-            D_mu +=microwave_field.generate_D(np.sum(omegas),H_int, QN, V_ref_int) #Matrix that shifts energies for rotating frame
-
-            
+            omega =microwave_field.calculate_frequency(H_rot, QN) #Calculate frequency of transition
+            D_mu =microwave_field.generate_D(omega,H_rot, QN, V_ref_int) #Matrix that shifts energies for rotating frame
+            H_rot += D_mu
+    
 
             #Define the coupling matrix as function of time
             def H_mu_t_func(H_list, Omega, ME_main, p_t, Omega_t, t):
@@ -270,7 +270,7 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
 
         #Generate function that gives couplings due to all microwaves
         def H_mu_tot_t(t):
-            H_mu_tot = csr_matrix(np.zeros(H_rot.shape))
+            H_mu_tot = np.zeros(H_rot.shape)
             for H_mu_t in microwave_couplings:
                 H_mu_tot = H_mu_tot + H_mu_t(t)
             return H_mu_tot
@@ -280,16 +280,16 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
                 pickle.dump(H_mu_tot_t(T/2),f)
 
         #Shift energies in H_int in accordance with the rotating frame
-        H_rot = H_rot + D_mu
+        #H_rot = H_rot + D_mu
 
     else:
-        H_mu_tot_t = lambda t: csr_matrix(np.zeros(H_rot.shape))
+        H_mu_tot_t = lambda t: np.zeros(H_rot.shape)
 
     if verbose:
         time = timeit.timeit("H_mu_tot_t(T/2)", number = 10, globals = locals())/10
         print("Time to generate H_mu_tot_t: {:.3e} s".format(time))
         H_test = H_mu_tot_t(T/2)
-        non_zero = H_test[np.abs(H_test) > 0].shape[1]
+        non_zero = H_test[np.abs(H_test) > 0].shape[0]
         print("Non-zero elements at T/2: {}".format(non_zero))
 
     ### 3. Optical couplings due to laser
@@ -309,6 +309,7 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
             ME_main = laser_field.calculate_ME_main() #Angular part of ME for main transition
             Omega_t = laser_field.find_Omega_t(r_t) #Time dependence of Rabi rate
             D_laser +=laser_field.generate_D(H_rot, QN) #Matrix that shifts energies for rotating frame
+            H_rot = H_rot + laser_field.generate_D(H_rot, QN)
 
 
             #Define the optical couplings as function of time
@@ -335,7 +336,7 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
             #H_oc_tot_t = lambda t: np.sum([H_oc_t(t) for H_oc_t in optical_couplings])
 
         def H_oc_tot_t(t):
-            H_oc_tot = csr_matrix(np.zeros(H_rot.shape))
+            H_oc_tot = np.zeros(H_rot.shape)
             for H_oc_t in optical_couplings:
                 H_oc_tot = H_oc_tot + H_oc_t(t)
             return H_oc_tot
@@ -343,11 +344,11 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
         #Shift energies in H_rot in accordance with the rotating frame
         #Also shift the energies so that ground_main is at zero energy
         i_g = QN.index(laser_field.ground_main)
-        H_rot = H_rot + D_laser - np.eye(H_rot.shape[0])*H_rot[i_g,i_g]
+        H_rot = H_rot  - np.eye(H_rot.shape[0])*H_rot[i_g,i_g] # + D_laser
 
     #If no laser fields are defined, set coupling matrix to zeros
     else:
-        H_oc_tot_t = lambda t: csr_matrix(np.zeros(H_rot.shape))
+        H_oc_tot_t = lambda t: np.zeros(H_rot.shape)
 
     if verbose:
         time = timeit.timeit("H_oc_tot_t(T/2)", number = 10, globals = locals())/10
@@ -362,7 +363,7 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
     ### 4. Total Hamiltonian
     #Define the total Hamiltonian (including the oscillating fields) in the rotating frame
     # as a function of time
-    H_tot_t = lambda t: csr_matrix(H_rot) + H_oc_tot_t(t) + H_mu_tot_t(t)
+    H_tot_t = lambda t: coo_matrix(H_rot + H_oc_tot_t(t) + H_mu_tot_t(t))
 
     if verbose:
         time = timeit.timeit("H_tot_t(T/2)", number = 10, globals = locals())/10
@@ -410,7 +411,7 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
 
     #Define a function that gives the time dependent part of the Liouvillian
     #at time t
-    L_t = lambda t: (-1j*generate_commutator_superoperator(csr_matrix(H_tot_t(t))) 
+    L_t = lambda t: (-1j*generate_commutator_superoperator(H_tot_t(t)) 
                         + L_collapse)
 
     if verbose:
@@ -457,6 +458,10 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
 
         #Find populations in each state
         pop_results[:,i+1] = np.real(np.diag(rho))
+
+    if verbose:
+        time = timeit.timeit("py_zgexpv(rho_vec, L_sparse, t = dt, anorm = norm, wsp = wsp, iwsp = iwsp,m = m)", number = 10, globals = locals())/10
+        print("Time for exponentiating: {:.3E}".format(time))
 
     return t_array, pop_results
 
