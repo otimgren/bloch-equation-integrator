@@ -293,8 +293,6 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
         H_test = H_mu_tot_t(T/2)
         non_zero = H_test[np.abs(H_test) > 0].shape[0]
         print("Non-zero elements at T/2: {}".format(non_zero))
-        time = timeit.timeit("L_mu_tot_t(T/2)", number = 10, globals = locals())/10
-        print("Time to generate L_mu_tot_t: {:.3e} s".format(time))
 
     ### 3. Optical couplings due to laser
     #If there are laser fields, loop over them. Otherwise skip this section
@@ -366,8 +364,6 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
         print(np.diag(D_laser))
         # with open("H_oc_tot.pickle",'wb+') as f:
         #     pickle.dump(H_oc_tot_t(T/2.3156165),f)
-        time = timeit.timeit("L_oc_tot_t(T/2)", number = 10, globals = locals())/10
-        print("Time to generate L_oc_tot_t: {:.3e} s".format(time))  
 
     ### 4. Total Hamiltonian
     #Define the total Hamiltonian (including the oscillating fields) in the rotating frame
