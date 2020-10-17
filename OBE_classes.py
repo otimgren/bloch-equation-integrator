@@ -118,7 +118,7 @@ class OpticalField:
                 print("Warning: Optical coupling matrix {} is not Hermitian!".format(i))
 
             #Convert to sparse matrix
-            H = csr_matrix(H)
+            # H = csr_matrix(H)
 
             #Append to list
             H_list.append(H)
@@ -274,7 +274,7 @@ class MicrowaveField:
                 print("Warning: Microwave coupling matrix {} is not Hermitian!".format(i))
 
             #Convert to sparse matrix
-            H = csr_matrix(H)
+            # H = csr_matrix(H)
 
             #Append to list of coupling matrices
             H_list.append(H)

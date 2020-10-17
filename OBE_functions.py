@@ -349,6 +349,16 @@ def calculate_power_needed(Omega, ME, fwhm_z = 0.0254, fwhm_y = 0.0254, D_TlF = 
     Function to calculate the microwave power required to get peak Rabi rate Omega
     for a transition with given matrix element when the microwaves have a
     Gaussian spatial profile
+
+    inputs:
+    Omega = desired Rabi rate [2*pi*Hz]
+    ME = angular part of matrix 
+    D_TlF = effective dipole moment for transition (also the non angular part of the ME) [2*pi*Hz/V/cm]
+    fwhm_z = full-width-half-max of intensity distribution along z [m]
+    fwhm_x = full-width-half-max of intensity distribution along x [m]
+
+    outputs:
+    P = power required to reach the given peak Rabi rate for the given beam and transition properties
     """
     
     #Calculate the microwave electric field required (in V/m)
