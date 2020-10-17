@@ -13,7 +13,7 @@ from tqdm.notebook import tqdm
 from scipy import constants
 from numpy import sqrt, exp
 # from sympy import exp, sqrt
-from scipy.sparse import kron, eye
+from scipy.sparse import kron, eye, coo_matrix, csr_matrix
 # from numpy import kron, eye
 from scipy.special import jv
 
@@ -87,6 +87,39 @@ def generate_superoperator(A,B):
     M_L = kron(B.T, A, format = 'csr')
 
     return M_L
+
+def generate_Ls_from_Hs(H_list):
+    """
+    Function that takes a list of Hamiltonians and generates the corresponding Lindbladians. 
+    Two lists of lindbladians are returned, one based on upper triangular part of the Hamiltonians
+    and one based on the lower triangular parts. This helps with adding phase modulation to the 
+    simulations.
+
+    inputs:
+    H_list = list of Hamiltonians
+
+    outputs:
+    Lu_list = Lindbladians generated based on upper triangular parts of H_list
+    Ll_list = Lindbladians generated based on lower triangular parts of H_list
+    """
+    #Generate lists up Lu and Ll by looping over the Hamiltonians
+    Lu_list = []
+    Ll_list = []
+
+    for H in H_list:
+        #Take upper and lower parts of Hamiltonian
+        Hu = np.triu(H)
+        Hl = np.tril(H)
+
+        #Calculate Lindbladians
+        Lu = generate_commutator_superoperator(Hu)
+        Ll = generate_commutator_superoperator(Hl)
+
+        #Store Linbladians in lists
+        Lu_list.append(Lu)
+        Ll_list.append(Ll)
+
+    return Lu_list, Ll_list
 
 def generate_rho_vector(rho):
     """
