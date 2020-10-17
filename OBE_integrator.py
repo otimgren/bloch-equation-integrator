@@ -35,6 +35,7 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
                    Gamma = 2*np.pi*1.6e6,
                    states_pop = None, pops = None,
                    Nsteps = int(5e3),
+                   method = 'exp'
                    verbose = True,
                   ):
     """
@@ -68,7 +69,7 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
 
     6. Generate initial density matrix
 
-    7. Transform to Liouville space
+    7. Transform to Liouville space if using exponentiation method
 
     8. Time-evolution
 
@@ -339,7 +340,7 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
             for H_oc_t in optical_couplings:
                 H_oc_tot = H_oc_tot + H_oc_t(t)
             return H_oc_tot
-
+    
         #Shift energies in H_rot in accordance with the rotating frame
         #Also shift the energies so that ground_main is at zero energy
         i_g = QN.index(laser_field.ground_main)
@@ -354,8 +355,8 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
         print("Time to generate H_oc_tot_t: {:.3e} s".format(time))
         print("Diagonal of H_rot in rotating frame of laser:")
         print(np.diag(H_rot)/(2*np.pi))
-        # print("D_laser:")
-        # print(np.diag(D_laser))
+        print("D_laser:")
+        print(np.diag(D_laser))
         with open("H_oc_tot.pickle",'wb+') as f:
             pickle.dump(H_oc_tot_t(T/2.3156165),f)        
 
@@ -394,69 +395,75 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
         states_pop[1].print_state()
         print("is {:.5f}".format(pops[1]))
 
-    ### 7. Transfer to Liouville space
-    #We transfer to Liouville space where the density matrix is a vector
-    #and time-evolution is found by matrix exponentiation
+    
+    if method == 'exp':
+        ### 7. Transfer to Liouville space
+        #We transfer to Liouville space where the density matrix is a vector
+        #and time-evolution is found by matrix exponentiation
 
-    #Generate the Lindbladian
-    #First compute the part that contains the spontaneous decay
-    L_collapse = np.zeros((len(QN)**2,len(QN)**2), dtype = complex)
-    for C in tqdm(C_list):
-        L_collapse += (generate_superoperator(C,C.conj().T)
-                        -1/2 * (generate_flat_superoperator(C.conj().T @ C) + 
-                                generate_sharp_superoperator(C.conj().T @ C)))
-    #Make the collapse operator into a sparse matrix
-    L_collapse = csr_matrix(L_collapse)
+        #Generate the Lindbladian
+        #First compute the part that contains the spontaneous decay
+        L_collapse = np.zeros((len(QN)**2,len(QN)**2), dtype = complex)
+        for C in tqdm(C_list):
+            L_collapse += (generate_superoperator(C,C.conj().T)
+                            -1/2 * (generate_flat_superoperator(C.conj().T @ C) + 
+                                    generate_sharp_superoperator(C.conj().T @ C)))
+        #Make the collapse operator into a sparse matrix
+        L_collapse = csr_matrix(L_collapse)
 
-    #Define a function that gives the time dependent part of the Liouvillian
-    #at time t
-    L_t = lambda t: (-1j*generate_commutator_superoperator(csr_matrix(H_tot_t(t))) 
-                        + L_collapse)
+        #Define a function that gives the time dependent part of the Liouvillian
+        #at time t
+        L_t = lambda t: (-1j*generate_commutator_superoperator(csr_matrix(H_tot_t(t))) 
+                            + L_collapse)
 
-    if verbose:
-        time = timeit.timeit("L_t(T/2)", number = 10, globals = locals())/10
-        print("Time to generate L_t: {:.3e} s".format(time))
+        if verbose:
+            time = timeit.timeit("L_t(T/2)", number = 10, globals = locals())/10
+            print("Time to generate L_t: {:.3e} s".format(time))
+            L_test = L_t(T/2)
+            non_zero = L_test[np.abs(L_test) > 0 ]
 
-    ### 8. Time-evolution
-    #Here we perform the time-evolution of the system
+        ### 8. Time-evolution
+        #Here we perform the time-evolution of the system
 
-    #Set rho vector to its initial value
-    rho_vec = generate_rho_vector(rho_ini)
+        #Set rho vector to its initial value
+        rho_vec = generate_rho_vector(rho_ini)
 
-    #Set number of steps and calculate timestep
-    dt = T/Nsteps
+        #Set number of steps and calculate timestep
+        dt = T/Nsteps
 
-    #Generate array of times
-    t_array = np.linspace(0,T,Nsteps)
+        #Generate array of times
+        t_array = np.linspace(0,T,Nsteps)
 
-    #Pre-calculate some parameters for the matrix exponentiation
-    #Calculate onenorm estimate
-    norm = onenormest(L_t(T/2))
+        #Pre-calculate some parameters for the matrix exponentiation
+        #Calculate onenorm estimate
+        norm = onenormest(L_t(T/2))
 
-    #Calculate wsp and iwsp
-    m = 20 #maximum size of Krylov subspace
-    n = rho_vec.shape[0]
-    wsp = np.zeros(7+n*(m+2)+5*(m+2)*(m+2),dtype=np.complex128)
-    iwsp = np.zeros(m+2, dtype=np.int32)
+        #Calculate wsp and iwsp
+        m = 20 #maximum size of Krylov subspace
+        n = rho_vec.shape[0]
+        wsp = np.zeros(7+n*(m+2)+5*(m+2)*(m+2),dtype=np.complex128)
+        iwsp = np.zeros(m+2, dtype=np.int32)
 
-    #Array for storing results
-    pop_results = np.zeros((len(QN), len(t_array)), dtype = float)
-    pop_results[:,0] = np.real(np.diag(rho_ini))
+        #Array for storing results
+        pop_results = np.zeros((len(QN), len(t_array)), dtype = float)
+        pop_results[:,0] = np.real(np.diag(rho_ini))
 
-    #Loop over timesteps
-    for i, t_i in enumerate(tqdm(t_array[1:])):
-        #Calculate the Lindbladian at this time
-        L_sparse = L_t(t_i)
+        #Loop over timesteps
+        for i, t_i in enumerate(tqdm(t_array[1:])):
+            #Calculate the Lindbladian at this time
+            L_sparse = L_t(t_i)
 
-        #Time evolve the density vector
-        rho_vec = py_zgexpv(rho_vec, L_sparse, t = dt, anorm = norm, wsp = wsp, iwsp = iwsp,
-                            m = m)
+            #Time evolve the density vector
+            rho_vec = py_zgexpv(rho_vec, L_sparse, t = dt, anorm = norm, wsp = wsp, iwsp = iwsp,
+                                m = m)
 
-        #Convert back to density matrix
-        rho = rho_vec.reshape(len(QN),len(QN))
+            #Convert back to density matrix
+            rho = rho_vec.reshape(len(QN),len(QN))
 
-        #Find populations in each state
-        pop_results[:,i+1] = np.real(np.diag(rho))
+            #Find populations in each state
+            pop_results[:,i+1] = np.real(np.diag(rho))
+
+        elif method == 'RK45':
 
     return t_array, pop_results
 

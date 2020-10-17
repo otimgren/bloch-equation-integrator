@@ -18,7 +18,7 @@ from scipy.sparse import kron, eye
 from scipy.special import jv
 
 
-def generate_sharp_superoperator(M):
+def generate_sharp_superoperator(M, identity = None):
     """
     Given an operator M in Hilbert space, generates sharp superoperator M_L in Liouville space (see "Optically pumped atoms" by Happer, Jau and Walker)
     sharp = post-multiplies density matrix: |rho@A) = A_sharp @ |rho) 
@@ -30,11 +30,14 @@ def generate_sharp_superoperator(M):
     M_L = representation of M in in Liouville space
     """
 
-    M_L = kron(M.T, eye(M.shape[0]))
+    if identity == None:
+         identity = eye(M.shape[0], format = 'coo')
+
+    M_L = kron(M.T,identity, format = 'csr')
 
     return M_L
 
-def generate_flat_superoperator(M):
+def generate_flat_superoperator(M, identity = None):
     """
     Given an operator M in Hilbert space, generates flat superoperator M_L in Liouville space (see "Optically pumped atoms" by Happer, Jau and Walker)
     flat = pre-multiplies density matrix: |A@rho) = A_flat @ |rho)
@@ -45,12 +48,14 @@ def generate_flat_superoperator(M):
     outputs:
     M_L = representation of M in in Liouville space
     """
+    if identity == None:
+         identity = eye(M.shape[0], format = 'coo')
 
-    M_L = kron(eye(M.shape[0]), M)
+    M_L = kron(identity, M, format = 'csr')
 
     return M_L
 
-def generate_commutator_superoperator(M):
+def generate_commutator_superoperator(M, identity = None):
     """
     Function that generates the commutator [M,rho] superoperator in Liouville space
 
@@ -61,7 +66,10 @@ def generate_commutator_superoperator(M):
     M_L = representation of commutator with M in in Liouville space
     """
 
-    M_com = generate_flat_superoperator(M)  - generate_sharp_superoperator(M)
+    if identity == None:
+         identity = eye(M.shape[0], format = 'coo')
+
+    M_com = generate_flat_superoperator(M, identity=identity)  - generate_sharp_superoperator(M, identity=identity)
 
     return M_com
 
@@ -76,7 +84,7 @@ def generate_superoperator(A,B):
     M_L = representation of A@rho@B in Liouville space
     """
 
-    M_L = kron(B.T, A)
+    M_L = kron(B.T, A, format = 'csr')
 
     return M_L
 
