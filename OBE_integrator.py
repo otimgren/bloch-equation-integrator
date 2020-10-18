@@ -10,6 +10,7 @@ from scipy.sparse import csr_matrix, coo_matrix#, triu, tril
 from scipy.sparse.linalg import onenormest
 import timeit
 import pickle
+from functools import partial
 
 
 #Custom classes for defining molecular states and some convenience functions for them
@@ -27,7 +28,10 @@ from OBE_classes import OpticalField, MicrowaveField
 #Function for matrix exponentiation
 from expokitpy import py_zgexpv
 
-from functools import partial
+#Import ODE solver from scipy
+from scipy.integrate import solve_ivp
+
+
 
 def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np.array((0,0,200)),  #Parameters for defining position of molecule as function of time:
                    X_states = None, B_states = None, #States that are needed for simulation
@@ -475,13 +479,42 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
         #     print("Time for exponentiating: {:.3E}".format(time))
 
     elif method == 'RK45':
-        pass
         ### 7. Setting up ODE solver
 
         #Still useful to use Liouville space for the collapse operators since they can be
         #fully precalculated
+        #Define a function that generates the RHS of the OBEs in vector format
+        def Lindblad_rhs(t, rho_vec):
+            dim = int(np.sqrt(len(rho_vec)))
+            rho = rho_vec.reshape((dim,dim))
+            rhs_H = (-1j* (H_tot_t(t) @ rho - rho @ H_tot_t(t))).flatten()
+            rhs_C = L_collapse @ rho_vec
+            rhs = rhs_H + rhs_C
+            return rhs
 
-    
+        if verbose:
+            time = timeit.timeit("rhs_test  = Lindblad_rhs(T/2,rho_ini.flatten())",
+                                 number = 10, globals = locals())/10
+            print("Time to generate RHS: {:.3e} s".format(time))
+
+        ### 8. Time-evolution
+
+        #Perform time evolution using IVP solver from scipy
+        t_span = (0, T)
+        sol = solve_ivp(Lindblad_rhs, t_span, rho_ini.flatten(), dense_output=True, 
+                        max_step = 3e-6, method = 'RK45')
+
+        #Get t_array and populations from solution object
+        t_array = sol.t
+        pop_results = np.real(np.einsum('jji->ji',sol.y.reshape((rho_ini.shape[0],
+                                        rho_ini.shape[1], sol.y.shape[1]))))
+
+    else:
+        raise NotImplementedError("Time integation method not implemented")
+
+        
+            
+
 
     return t_array, pop_results
 
