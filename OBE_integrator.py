@@ -38,7 +38,7 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
                    microwave_fields = None, laser_fields = None,
                    Gamma = 2*np.pi*1.6e6,
                    states_pop = None, pops = None,
-                   Nsteps = int(5e3),
+                   Nsteps = int(5e3), dt = None, dt_max = 1e-5,
                    method = 'exp',
                    verbose = True,
                   ):
@@ -438,8 +438,11 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
         #Set rho vector to its initial value
         rho_vec = generate_rho_vector(rho_ini)
 
-        #Set number of steps and calculate timestep
-        dt = T/Nsteps
+        #Calculate timestep
+        if dt is None:
+            dt = T/Nsteps
+        else:
+            Nsteps = int(T/dt)+1
 
         #Generate array of times
         t_array = np.linspace(0,T,Nsteps)
@@ -502,7 +505,7 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
         #Perform time evolution using IVP solver from scipy
         t_span = (0, T)
         sol = solve_ivp(Lindblad_rhs, t_span, rho_ini.flatten(), dense_output=True, 
-                        max_step = 3e-6, method = 'RK45')
+                        max_step = dt_max, method = 'RK45')
 
         #Get t_array and populations from solution object
         t_array = sol.t
@@ -511,10 +514,6 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
 
     else:
         raise NotImplementedError("Time integation method not implemented")
-
-        
-            
-
 
     return t_array, pop_results
 
