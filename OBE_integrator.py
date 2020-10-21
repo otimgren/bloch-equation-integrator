@@ -33,14 +33,14 @@ from scipy.integrate import solve_ivp
 
 
 
-def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np.array((0,0,200)),  #Parameters for defining position of molecule as function of time:
+def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np.array((0,0,200)),  #Parameters for defining position of molecule as function of time
                    X_states = None, B_states = None, #States that are needed for simulation
-                   microwave_fields = None, laser_fields = None,
-                   Gamma = 2*np.pi*1.6e6,
-                   states_pop = None, pops = None,
-                   Nsteps = int(5e3), dt = None, dt_max = 1e-5,
-                   method = 'exp',
-                   verbose = True,
+                   microwave_fields = None, laser_fields = None, #Lists of MicrowaveFields and LaserFields 
+                   Gamma = 2*np.pi*1.6e6, #Natural linewidth of the excited state
+                   states_pop = None, pops = None, #States that are populated and their populations
+                   Nsteps = int(5e3), dt = None, dt_max = 1e-5, #Number of timesteps, or alternatively size of timesteps
+                   method = 'exp', #Method to use for time-integration
+                   verbose = True, #Whether or not to print outputs for debugging
                   ):
     """
     Function that integrates optical Bloch equations for TlF in Centrex.
@@ -61,10 +61,10 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
         1.2 Define B-state Hamiltonian and find the diagonal basis
 
     2. Microwave couplings. Construct Hamiltonian for microwave couplings between different 
-       rotational states within X.
+       rotational states within X based on the list of microwave fields that is provided.
 
-    3. Optical couplings. Construct the Hamiltonian for laser couplings between X_states_laser and
-       B_states_laser.
+    3. Optical couplings. Construct the Hamiltonian for laser couplings between X and B. Can
+       have multiple laser fields provided in a list of LaserField objects.
     
     4. Generate the total Hamiltonian that contains the couplings due to the fields, and the
        internal molecular Hamiltonian
@@ -89,7 +89,7 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
     pops = initial populations of states_pops. If none, Boltzmann distribution assumed
 
     outputs:
-    t_array = array of times at which we have datapoints
+    t_array = array of times at which we have datapoints [s]
     pop_results = populations in each state at the times stored in t_array
 
     """
@@ -341,6 +341,8 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
                 i_g = QN.index(laser_field.ground_main)
                 print(H_oc_t(T/2)[i_e,i_g]/(2*np.pi*1e6))
                 print(Omega_t(T/2)/(1e6*2*np.pi))
+                print("excited main:")
+                laser_field.ground_main.print_state()
 
         #Functions for total Hamiltonian and Lindbladian due to optical couplings
         def H_oc_tot_t(t):
@@ -411,8 +413,8 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
 
     if verbose:
         print("Initial population in")
-        states_pop[1].print_state()
-        print("is {:.5f}".format(pops[1]))
+        states_pop[0].print_state()
+        print("is {:.5f}".format(pops[0]))
 
     
     if method == 'exp':
@@ -483,10 +485,10 @@ def OBE_integrator(r0 = np.array((0.,0.,0.)),  r1 = np.array((0,0,3e-2)), v = np
 
     elif method == 'RK45':
         ### 7. Setting up ODE solver
-
-        #Still useful to use Liouville space for the collapse operators since they can be
-        #fully precalculated
+        
         #Define a function that generates the RHS of the OBEs in vector format
+        #Still useful to use Liouville space for the collapse operators since they can be
+        #fully precalculated (see rhs_C below)
         def Lindblad_rhs(t, rho_vec):
             dim = int(np.sqrt(len(rho_vec)))
             rho = rho_vec.reshape((dim,dim))
